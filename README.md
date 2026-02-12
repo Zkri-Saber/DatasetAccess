@@ -36,7 +36,7 @@ pip install -e .
 ### Python API
 
 ```python
-from dataset_access import read_dataset, search_missing
+from dataset_access import read_dataset, read_directory, search_missing, summarize_datasets
 
 # Auto-detect format from extension
 df = read_dataset("data.csv")
@@ -51,6 +51,16 @@ df = read_dataset("https://example.com/data.json")
 
 # Read from SQL database
 df = read_dataset("sqlite:///my.db", format="sql", query="SELECT * FROM users")
+
+# Read all files from a directory
+datasets = read_directory("data/", recursive=True)
+for path, df in datasets.items():
+    print(f"{path}: {df.shape}")
+
+# Summarize all datasets in a directory into one table
+summary = summarize_datasets("data/")
+print(summary)
+#   dataset_name  num_instances  num_features  missing_pct  imbalance_ratio  mean  ...
 
 # Search for missing values
 report = search_missing(df)
@@ -85,9 +95,40 @@ dataset-access data.csv --missing
 # SQL query
 dataset-access "sqlite:///my.db" -f sql -q "SELECT * FROM users"
 
+# Summarize all datasets in a directory
+dataset-access data/ --summary
+
+# Summarize recursively and save to CSV
+dataset-access data/ --summary --recursive --summary-output summary.csv
+
 # List all supported formats
 dataset-access --formats
 ```
+
+## Summary Table Columns
+
+The `--summary` flag produces a table with these columns for each dataset file:
+
+| Column | Description |
+|--------|-------------|
+| `dataset_name` | File name |
+| `num_instances` | Number of rows |
+| `num_features` | Number of columns |
+| `numeric_features` | Count of numeric columns |
+| `categorical_features` | Count of categorical columns |
+| `missing_values` | Total missing cells |
+| `missing_pct` | Percentage of missing cells |
+| `duplicate_rows` | Number of duplicate rows |
+| `duplicate_pct` | Percentage of duplicate rows |
+| `target_column` | Auto-detected target/label column |
+| `target_classes` | Number of unique classes in target |
+| `imbalance_ratio` | Majority / minority class ratio |
+| `mean` | Grand mean of all numeric features |
+| `std` | Average standard deviation |
+| `min` | Global minimum |
+| `max` | Global maximum |
+| `median` | Grand median |
+| `memory_mb` | Memory usage in MB |
 
 ## Project Structure
 

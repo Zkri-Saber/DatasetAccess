@@ -3,12 +3,16 @@
 import argparse
 import sys
 
+import pandas as pd
+
 from .reader import (
     SUPPORTED_EXTENSIONS,
     read_dataset,
     read_directory,
     search_missing,
     plot_missing,
+    summarize_dataset,
+    summarize_datasets,
 )
 
 
@@ -57,6 +61,15 @@ def build_parser():
     parser.add_argument(
         "--recursive", action="store_true",
         help="Scan subdirectories when reading a directory.",
+    )
+    parser.add_argument(
+        "--summary", action="store_true",
+        help="Show a summary table (instances, features, missing %%, "
+             "imbalance, mean, std, etc.) for each dataset.",
+    )
+    parser.add_argument(
+        "--summary-output", default=None,
+        help="Save the summary table to a file (csv, xlsx, json, etc.).",
     )
     parser.add_argument(
         "--formats", action="store_true",
@@ -111,6 +124,23 @@ def main():
     import os
 
     if os.path.isdir(args.source):
+        # --- Summary table mode ---
+        if args.summary:
+            summary = summarize_datasets(
+                args.source, recursive=args.recursive,
+            )
+            if summary.empty:
+                sys.exit(1)
+            print("\n" + "=" * 80)
+            print("  DATASETS SUMMARY TABLE")
+            print("=" * 80)
+            print(summary.to_string(index=False))
+            print()
+            if args.summary_output:
+                _save_output(summary, args.summary_output)
+            return
+
+        # --- Per-file display mode ---
         datasets = read_directory(
             args.source, recursive=args.recursive,
         )
@@ -129,7 +159,6 @@ def main():
             elif args.missing:
                 print(search_missing(df).to_string(index=False))
             elif args.output:
-                # skip batch output in directory mode
                 _print_df(df, args.rows)
             else:
                 _print_df(df, args.rows)
@@ -145,6 +174,18 @@ def main():
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
+
+    if args.summary:
+        from pathlib import Path as _P
+        summary = pd.DataFrame([summarize_dataset(df, name=_P(args.source).name)])
+        print("\n" + "=" * 80)
+        print("  DATASET SUMMARY TABLE")
+        print("=" * 80)
+        print(summary.to_string(index=False))
+        print()
+        if args.summary_output:
+            _save_output(summary, args.summary_output)
+        return
 
     if args.missing_chart is not None:
         output = args.missing_chart if isinstance(args.missing_chart, str) else None

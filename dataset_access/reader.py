@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 # Map file extensions to reader functions
@@ -141,6 +142,110 @@ def search_missing(source, **kwargs):
         )
 
     return pd.DataFrame(records)
+
+
+def _detect_target_column(df):
+    """Heuristic to find the most likely target/label column.
+
+    Checks for common names first, then falls back to the last
+    categorical or low-cardinality integer column.
+    """
+    common_names = [
+        "target", "label", "class", "y", "outcome", "category",
+        "is_fraud", "survived", "diagnosis", "species",
+    ]
+    lower_cols = {c.lower(): c for c in df.columns}
+    for name in common_names:
+        if name in lower_cols:
+            return lower_cols[name]
+
+    # Fallback: last column that is categorical or has few unique values
+    for col in reversed(df.columns.tolist()):
+        if df[col].dtype == "object" or df[col].dtype.name == "category":
+            return col
+        if pd.api.types.is_integer_dtype(df[col]) and df[col].nunique() <= 20:
+            return col
+
+    return None
+
+
+def _imbalance_ratio(series):
+    """Return the imbalance ratio (majority / minority) for a Series.
+
+    Returns None if the column has fewer than 2 unique non-null values.
+    """
+    counts = series.dropna().value_counts()
+    if len(counts) < 2:
+        return None
+    return round(counts.iloc[0] / counts.iloc[-1], 2)
+
+
+def summarize_dataset(df, name="dataset"):
+    """Build a single-row summary dict for one DataFrame."""
+    n_rows, n_cols = df.shape
+    total_cells = n_rows * n_cols
+    total_missing = int(df.isna().sum().sum())
+    missing_pct = round(total_missing / total_cells * 100, 2) if total_cells else 0.0
+
+    numeric_df = df.select_dtypes(include="number")
+    cat_df = df.select_dtypes(include=["object", "category"])
+
+    target_col = _detect_target_column(df)
+    imbalance = None
+    target_classes = None
+    if target_col is not None:
+        imbalance = _imbalance_ratio(df[target_col])
+        target_classes = int(df[target_col].nunique())
+
+    duplicate_rows = int(df.duplicated().sum())
+
+    summary = {
+        "dataset_name": name,
+        "num_instances": n_rows,
+        "num_features": n_cols,
+        "numeric_features": len(numeric_df.columns),
+        "categorical_features": len(cat_df.columns),
+        "missing_values": total_missing,
+        "missing_pct": missing_pct,
+        "duplicate_rows": duplicate_rows,
+        "duplicate_pct": round(duplicate_rows / n_rows * 100, 2) if n_rows else 0.0,
+        "target_column": target_col if target_col else "N/A",
+        "target_classes": target_classes if target_classes else "N/A",
+        "imbalance_ratio": imbalance if imbalance else "N/A",
+        "mean": round(numeric_df.mean().mean(), 4) if not numeric_df.empty else "N/A",
+        "std": round(numeric_df.std().mean(), 4) if not numeric_df.empty else "N/A",
+        "min": round(numeric_df.min().min(), 4) if not numeric_df.empty else "N/A",
+        "max": round(numeric_df.max().max(), 4) if not numeric_df.empty else "N/A",
+        "median": round(numeric_df.median().median(), 4) if not numeric_df.empty else "N/A",
+        "memory_mb": round(df.memory_usage(deep=True).sum() / 1_048_576, 3),
+    }
+    return summary
+
+
+def summarize_datasets(directory, extensions=None, recursive=False):
+    """Read all datasets in a directory and return a summary table.
+
+    Args:
+        directory: Path to the directory to scan.
+        extensions: Optional set/list of extensions to include.
+        recursive: If True, scan subdirectories.
+
+    Returns:
+        A pandas DataFrame where each row summarises one dataset file,
+        with columns such as dataset_name, num_instances, num_features,
+        missing_pct, imbalance_ratio, mean, std, min, max, median, etc.
+    """
+    datasets = read_directory(directory, extensions=extensions, recursive=recursive)
+    if not datasets:
+        return pd.DataFrame()
+
+    rows = []
+    for path, df in datasets.items():
+        name = Path(path).name
+        rows.append(summarize_dataset(df, name=name))
+
+    summary_df = pd.DataFrame(rows)
+    return summary_df
 
 
 def plot_missing(source, output=None, **kwargs):
