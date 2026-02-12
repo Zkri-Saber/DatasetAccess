@@ -5,14 +5,24 @@ import sys
 
 import pandas as pd
 
-from dataset_access.reader import read_dataset, list_supported_formats, search_missing, plot_missing
+from dataset_access.reader import (
+    read_dataset,
+    read_directory,
+    list_supported_formats,
+    search_missing,
+    plot_missing,
+)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Read any dataset and display or convert it."
     )
-    parser.add_argument("source", help="File path, URL, or SQL connection string.")
+    parser.add_argument(
+        "source",
+        help="File path, directory path, URL, or SQL connection string. "
+             "When a directory is given, all supported dataset files inside it are read.",
+    )
     parser.add_argument(
         "-f", "--format",
         help="Explicit format (e.g. csv, json, parquet). Auto-detected if omitted.",
@@ -71,30 +81,55 @@ def main():
     if args.query:
         kwargs["query"] = args.query
 
-    try:
-        df = read_dataset(args.source, format=args.format, **kwargs)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+    # --- load dataset(s) ----------------------------------------------------
+    import os
 
+    is_dir = os.path.isdir(args.source)
+
+    if is_dir:
+        try:
+            datasets = read_directory(args.source, **kwargs)
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Found {len(datasets)} dataset(s) in '{args.source}':\n")
+        for name, df in datasets.items():
+            print(f"{'=' * 60}")
+            print(f"  File: {name}  |  Shape: {df.shape[0]} rows x {df.shape[1]} columns")
+            print(f"{'=' * 60}")
+            _display_single(df, name, args)
+            print()
+    else:
+        try:
+            df = read_dataset(args.source, format=args.format, **kwargs)
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        if args.head is not None:
+            df = df.head(args.head)
+
+        if args.output:
+            _write_output(df, args.output)
+            print(f"Written {len(df)} rows to {args.output}")
+            return
+
+        _display_single(df, args.source, args)
+
+
+def _display_single(df: pd.DataFrame, name: str, args) -> None:
+    """Display a single DataFrame according to the CLI flags."""
     if args.head is not None:
         df = df.head(args.head)
-
-    if args.output:
-        _write_output(df, args.output)
-        print(f"Written {len(df)} rows to {args.output}")
-        return
 
     if args.missing_chart is not None:
         output_path = args.missing_chart if args.missing_chart else None
         plot_missing(df, output=output_path)
-        return
-
-    if args.missing:
+    elif args.missing:
         report = search_missing(df)
         total_missing = report["missing_count"].sum()
         total_cells = report["total_count"].iloc[0] * len(report)
-        print(f"Dataset: {args.source}")
+        print(f"Dataset: {name}")
         print(f"Shape: {df.shape[0]} rows x {df.shape[1]} columns")
         print(f"Total missing: {total_missing} / {total_cells} cells "
               f"({total_missing / total_cells * 100:.2f}%)\n")

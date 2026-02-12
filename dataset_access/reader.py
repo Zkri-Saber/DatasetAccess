@@ -70,6 +70,49 @@ def read_dataset(source: str, format: str | None = None, **kwargs) -> pd.DataFra
     return reader(source, **kwargs)
 
 
+def read_directory(
+    directory: str,
+    extensions: list[str] | None = None,
+    **kwargs,
+) -> dict[str, pd.DataFrame]:
+    """Read all supported dataset files from a directory.
+
+    Scans the directory for files whose extensions match SUPPORTED_FORMATS
+    (or a custom list) and loads each one into a DataFrame.
+
+    Args:
+        directory: Path to the directory containing dataset files.
+        extensions: Optional list of extensions to include (e.g. [".csv", ".json"]).
+                    If *None*, all supported extensions are accepted.
+        **kwargs: Extra keyword arguments forwarded to read_dataset() for every file.
+
+    Returns:
+        A dict mapping each file name to its loaded DataFrame.
+
+    Example:
+        >>> datasets = read_directory("./data")
+        >>> datasets = read_directory("./data", extensions=[".csv"])
+    """
+    dir_path = Path(directory)
+    if not dir_path.is_dir():
+        raise ValueError(f"'{directory}' is not a valid directory.")
+
+    allowed = {ext.lower() for ext in (extensions or SUPPORTED_FORMATS)}
+
+    datasets: dict[str, pd.DataFrame] = {}
+    for file in sorted(dir_path.iterdir()):
+        if file.is_file() and file.suffix.lower() in allowed:
+            try:
+                datasets[file.name] = read_dataset(str(file), **kwargs)
+            except Exception as e:
+                print(f"Warning: skipped '{file.name}' ({e})")
+    if not datasets:
+        raise ValueError(
+            f"No supported dataset files found in '{directory}'."
+        )
+    return datasets
+
+
 def list_supported_formats() -> dict[str, str]:
     """Return a mapping of file extension to human-readable format name."""
     return dict(SUPPORTED_FORMATS)
@@ -112,15 +155,29 @@ def search_missing(df: pd.DataFrame) -> pd.DataFrame:
     return report
 
 
-def plot_missing(df: pd.DataFrame, output: str | None = None) -> None:
+def plot_missing(
+    source: "pd.DataFrame | str",
+    format: str | None = None,
+    output: str | None = None,
+    **kwargs,
+) -> None:
     """Display a bar chart of missing values per column.
 
     Args:
-        df: The DataFrame to analyze.
+        source: A pandas DataFrame, or a file path / URL to a dataset.
+                When a string is given the dataset is loaded via read_dataset().
+        format: Explicit format override when *source* is a path (e.g. "csv").
         output: Optional file path to save the chart (e.g. "missing.png").
                 If *None* the chart is displayed interactively.
+        **kwargs: Extra keyword arguments forwarded to read_dataset() when
+                  *source* is a path.
     """
     import matplotlib.pyplot as plt
+
+    if isinstance(source, pd.DataFrame):
+        df = source
+    else:
+        df = read_dataset(source, format=format, **kwargs)
 
     report = search_missing(df)
     report = report[report["missing_count"] > 0]
