@@ -20,6 +20,8 @@ def main():
     )
     parser.add_argument(
         "source",
+        nargs="?",
+        default=None,
         help="File path, directory path, URL, or SQL connection string. "
              "When a directory is given, all supported dataset files inside it are read.",
     )
@@ -77,6 +79,9 @@ def main():
             print(f"  {ext:12s}  {name}")
         return
 
+    if args.source is None:
+        parser.error("the following arguments are required: source")
+
     kwargs = {}
     if args.query:
         kwargs["query"] = args.query
@@ -84,7 +89,8 @@ def main():
     # --- load dataset(s) ----------------------------------------------------
     import os
 
-    is_dir = os.path.isdir(args.source)
+    source = args.source.rstrip(os.sep) if args.source != os.sep else args.source
+    is_dir = os.path.isdir(source)
 
     if is_dir:
         try:
