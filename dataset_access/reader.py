@@ -1,0 +1,199 @@
+"""Unified dataset reader supporting multiple file formats and data sources."""
+
+import os
+from pathlib import Path
+
+import pandas as pd
+
+
+SUPPORTED_FORMATS = {
+    ".csv": "CSV",
+    ".tsv": "TSV",
+    ".json": "JSON",
+    ".jsonl": "JSON Lines",
+    ".xlsx": "Excel (.xlsx)",
+    ".xls": "Excel (.xls)",
+    ".parquet": "Parquet",
+    ".feather": "Feather",
+    ".orc": "ORC",
+    ".hdf": "HDF5",
+    ".h5": "HDF5",
+    ".html": "HTML table",
+    ".xml": "XML",
+    ".fwf": "Fixed-width",
+    ".pkl": "Pickle",
+    ".sas7bdat": "SAS",
+    ".xpt": "SAS XPORT",
+    ".dta": "Stata",
+    ".sav": "SPSS",
+}
+
+
+def read_dataset(source: str, format: str | None = None, **kwargs) -> pd.DataFrame:
+    """Read a dataset from a file path, URL, or SQL connection string.
+
+    Args:
+        source: File path, URL, or SQLAlchemy connection string.
+        format: Explicit format override (e.g. "csv", "json", "parquet").
+                 Auto-detected from file extension if not provided.
+        **kwargs: Extra keyword arguments forwarded to the underlying pandas reader.
+
+    Returns:
+        A pandas DataFrame with the loaded data.
+
+    Supported formats:
+        csv, tsv, json, jsonl, xlsx, xls, parquet, feather, orc,
+        hdf5, html, xml, fixed-width, pickle, sas, stata, spss.
+
+    Also supports:
+        - SQL queries via SQLAlchemy connection strings (set format="sql"
+          and pass `query` in kwargs).
+        - URLs for any format that pandas can stream.
+
+    Examples:
+        >>> df = read_dataset("data.csv")
+        >>> df = read_dataset("data.json", orient="records")
+        >>> df = read_dataset("s3://bucket/data.parquet")
+        >>> df = read_dataset("sqlite:///my.db", format="sql", query="SELECT * FROM t")
+    """
+    if format:
+        ext = f".{format.lower().lstrip('.')}"
+    else:
+        ext = _detect_format(source)
+
+    reader = _get_reader(ext)
+    if reader is None:
+        raise ValueError(
+            f"Unsupported format '{ext}'. Supported: {', '.join(sorted(SUPPORTED_FORMATS))}"
+        )
+
+    return reader(source, **kwargs)
+
+
+def list_supported_formats() -> dict[str, str]:
+    """Return a mapping of file extension to human-readable format name."""
+    return dict(SUPPORTED_FORMATS)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _detect_format(source: str) -> str:
+    """Infer the file format from the source path/URL."""
+    # Strip query params for URLs
+    path = source.split("?")[0]
+    ext = Path(path).suffix.lower()
+    if not ext:
+        raise ValueError(
+            f"Cannot detect format from '{source}'. Pass format= explicitly."
+        )
+    return ext
+
+
+def _get_reader(ext: str):
+    """Return the appropriate reader function for a given extension."""
+    readers = {
+        ".csv": _read_csv,
+        ".tsv": _read_tsv,
+        ".json": _read_json,
+        ".jsonl": _read_jsonl,
+        ".xlsx": _read_excel,
+        ".xls": _read_excel,
+        ".parquet": _read_parquet,
+        ".feather": _read_feather,
+        ".orc": _read_orc,
+        ".hdf": _read_hdf,
+        ".h5": _read_hdf,
+        ".html": _read_html,
+        ".xml": _read_xml,
+        ".fwf": _read_fwf,
+        ".pkl": _read_pickle,
+        ".sas7bdat": _read_sas,
+        ".xpt": _read_sas,
+        ".dta": _read_stata,
+        ".sav": _read_spss,
+        ".sql": _read_sql,
+    }
+    return readers.get(ext)
+
+
+# ---------------------------------------------------------------------------
+# Format-specific readers
+# ---------------------------------------------------------------------------
+
+def _read_csv(source, **kwargs):
+    return pd.read_csv(source, **kwargs)
+
+
+def _read_tsv(source, **kwargs):
+    kwargs.setdefault("sep", "\t")
+    return pd.read_csv(source, **kwargs)
+
+
+def _read_json(source, **kwargs):
+    return pd.read_json(source, **kwargs)
+
+
+def _read_jsonl(source, **kwargs):
+    kwargs.setdefault("lines", True)
+    return pd.read_json(source, **kwargs)
+
+
+def _read_excel(source, **kwargs):
+    return pd.read_excel(source, **kwargs)
+
+
+def _read_parquet(source, **kwargs):
+    return pd.read_parquet(source, **kwargs)
+
+
+def _read_feather(source, **kwargs):
+    return pd.read_feather(source, **kwargs)
+
+
+def _read_orc(source, **kwargs):
+    return pd.read_orc(source, **kwargs)
+
+
+def _read_hdf(source, **kwargs):
+    return pd.read_hdf(source, **kwargs)
+
+
+def _read_html(source, **kwargs):
+    tables = pd.read_html(source, **kwargs)
+    if not tables:
+        raise ValueError(f"No HTML tables found in '{source}'.")
+    return tables[0]
+
+
+def _read_xml(source, **kwargs):
+    return pd.read_xml(source, **kwargs)
+
+
+def _read_fwf(source, **kwargs):
+    return pd.read_fwf(source, **kwargs)
+
+
+def _read_pickle(source, **kwargs):
+    return pd.read_pickle(source, **kwargs)
+
+
+def _read_sas(source, **kwargs):
+    return pd.read_sas(source, **kwargs)
+
+
+def _read_stata(source, **kwargs):
+    return pd.read_stata(source, **kwargs)
+
+
+def _read_spss(source, **kwargs):
+    return pd.read_spss(source, **kwargs)
+
+
+def _read_sql(source, query=None, **kwargs):
+    if not query:
+        raise ValueError("format='sql' requires a `query` keyword argument.")
+    from sqlalchemy import create_engine
+    engine = create_engine(source)
+    return pd.read_sql(query, engine, **kwargs)
