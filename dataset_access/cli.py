@@ -5,7 +5,7 @@ import sys
 
 import pandas as pd
 
-from dataset_access.reader import read_dataset, list_supported_formats
+from dataset_access.reader import read_dataset, list_supported_formats, search_missing
 
 
 def main():
@@ -42,6 +42,11 @@ def main():
         help="Print summary statistics instead of data.",
     )
     parser.add_argument(
+        "--missing",
+        action="store_true",
+        help="Show missing value report (count, percentage per column).",
+    )
+    parser.add_argument(
         "--formats",
         action="store_true",
         help="List all supported formats and exit.",
@@ -72,7 +77,16 @@ def main():
         print(f"Written {len(df)} rows to {args.output}")
         return
 
-    if args.info:
+    if args.missing:
+        report = search_missing(df)
+        total_missing = report["missing_count"].sum()
+        total_cells = report["total_count"].iloc[0] * len(report)
+        print(f"Dataset: {args.source}")
+        print(f"Shape: {df.shape[0]} rows x {df.shape[1]} columns")
+        print(f"Total missing: {total_missing} / {total_cells} cells "
+              f"({total_missing / total_cells * 100:.2f}%)\n")
+        print(report.to_string(index=False))
+    elif args.info:
         df.info()
     elif args.describe:
         print(df.describe().to_string())

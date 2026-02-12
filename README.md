@@ -36,7 +36,7 @@ pip install -e .
 ### Python API
 
 ```python
-from dataset_access import read_dataset
+from dataset_access import read_dataset, search_missing
 
 # Auto-detect format from extension
 df = read_dataset("data.csv")
@@ -51,6 +51,14 @@ df = read_dataset("https://example.com/data.json")
 
 # Read from SQL database
 df = read_dataset("sqlite:///my.db", format="sql", query="SELECT * FROM users")
+
+# Search for missing values
+report = search_missing(df)
+print(report)
+#   column  missing_count  total_count  missing_percent   dtype
+#   age              15          100            15.0     float64
+#   email             3          100             3.0      object
+#   name              0          100             0.0      object
 ```
 
 ### CLI
@@ -70,6 +78,9 @@ dataset-access data.csv --describe
 
 # Convert between formats
 dataset-access data.csv -o data.parquet
+
+# Search for missing values in a dataset
+dataset-access data.csv --missing
 
 # SQL query
 dataset-access "sqlite:///my.db" -f sql -q "SELECT * FROM users"

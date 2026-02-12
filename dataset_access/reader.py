@@ -75,6 +75,43 @@ def list_supported_formats() -> dict[str, str]:
     return dict(SUPPORTED_FORMATS)
 
 
+def search_missing(df: pd.DataFrame) -> pd.DataFrame:
+    """Analyze missing values in a DataFrame.
+
+    Returns a summary DataFrame with one row per column, containing:
+        - column: Column name
+        - missing_count: Number of missing (NaN/None) values
+        - total_count: Total number of rows
+        - missing_percent: Percentage of missing values
+        - dtype: Data type of the column
+
+    Args:
+        df: The DataFrame to analyze.
+
+    Returns:
+        A DataFrame summarizing missing values, sorted by missing_count descending.
+
+    Example:
+        >>> df = read_dataset("data.csv")
+        >>> report = search_missing(df)
+        >>> print(report)
+    """
+    missing_count = df.isnull().sum()
+    total_count = len(df)
+    missing_percent = (missing_count / total_count * 100).round(2)
+
+    report = pd.DataFrame({
+        "column": df.columns,
+        "missing_count": missing_count.values,
+        "total_count": total_count,
+        "missing_percent": missing_percent.values,
+        "dtype": df.dtypes.values,
+    })
+
+    report = report.sort_values("missing_count", ascending=False).reset_index(drop=True)
+    return report
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
