@@ -112,15 +112,29 @@ def search_missing(df: pd.DataFrame) -> pd.DataFrame:
     return report
 
 
-def plot_missing(df: pd.DataFrame, output: str | None = None) -> None:
+def plot_missing(
+    source: "pd.DataFrame | str",
+    format: str | None = None,
+    output: str | None = None,
+    **kwargs,
+) -> None:
     """Display a bar chart of missing values per column.
 
     Args:
-        df: The DataFrame to analyze.
+        source: A pandas DataFrame, or a file path / URL to a dataset.
+                When a string is given the dataset is loaded via read_dataset().
+        format: Explicit format override when *source* is a path (e.g. "csv").
         output: Optional file path to save the chart (e.g. "missing.png").
                 If *None* the chart is displayed interactively.
+        **kwargs: Extra keyword arguments forwarded to read_dataset() when
+                  *source* is a path.
     """
     import matplotlib.pyplot as plt
+
+    if isinstance(source, pd.DataFrame):
+        df = source
+    else:
+        df = read_dataset(source, format=format, **kwargs)
 
     report = search_missing(df)
     report = report[report["missing_count"] > 0]
