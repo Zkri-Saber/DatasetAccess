@@ -112,6 +112,54 @@ def search_missing(df: pd.DataFrame) -> pd.DataFrame:
     return report
 
 
+def plot_missing(df: pd.DataFrame, output: str | None = None) -> None:
+    """Display a bar chart of missing values per column.
+
+    Args:
+        df: The DataFrame to analyze.
+        output: Optional file path to save the chart (e.g. "missing.png").
+                If *None* the chart is displayed interactively.
+    """
+    import matplotlib.pyplot as plt
+
+    report = search_missing(df)
+    report = report[report["missing_count"] > 0]
+
+    if report.empty:
+        print("No missing values found.")
+        return
+
+    columns = report["column"]
+    counts = report["missing_count"]
+    percentages = report["missing_percent"]
+
+    fig, ax = plt.subplots(figsize=(max(6, len(columns) * 0.8), 5))
+
+    bars = ax.bar(columns, counts, color="#e74c3c", edgecolor="white")
+
+    for bar, pct in zip(bars, percentages):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{pct}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    ax.set_xlabel("Column")
+    ax.set_ylabel("Missing Count")
+    ax.set_title("Missing Values per Column")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+
+    if output:
+        fig.savefig(output, dpi=150)
+        print(f"Chart saved to {output}")
+    else:
+        plt.show()
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

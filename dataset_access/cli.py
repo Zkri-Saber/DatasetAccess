@@ -5,7 +5,7 @@ import sys
 
 import pandas as pd
 
-from dataset_access.reader import read_dataset, list_supported_formats, search_missing
+from dataset_access.reader import read_dataset, list_supported_formats, search_missing, plot_missing
 
 
 def main():
@@ -47,6 +47,14 @@ def main():
         help="Show missing value report (count, percentage per column).",
     )
     parser.add_argument(
+        "--missing-chart",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="FILE",
+        help="Show a bar chart of missing values. Optionally save to FILE (e.g. missing.png).",
+    )
+    parser.add_argument(
         "--formats",
         action="store_true",
         help="List all supported formats and exit.",
@@ -75,6 +83,11 @@ def main():
     if args.output:
         _write_output(df, args.output)
         print(f"Written {len(df)} rows to {args.output}")
+        return
+
+    if args.missing_chart is not None:
+        output_path = args.missing_chart if args.missing_chart else None
+        plot_missing(df, output=output_path)
         return
 
     if args.missing:
